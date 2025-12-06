@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Energy Usage vs Comfort Score — Twin-B</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    /* Dashboard layout styles */
+    body { background: #f5f7f9; margin:0; font-family: Arial, Helvetica, sans-serif; }
+    .container { max-width: 1400px; margin: 16px auto; padding: 12px; }
+    header h1 { margin: 0; font-size: 20px; }
+    .nav-line { margin-bottom: 12px; font-size: 14px; color: #333; }
+
+    .metrics { display:flex; gap:16px; margin: 12px 0 18px 0; align-items:stretch; }
+    .card {
+      background: #fff;
+      border: 1px solid #e4e7ea;
+      padding: 14px;
+      border-radius: 6px;
+      flex: 1 1 0;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+      opacity: 0.4;
+      transition: opacity 0.3s ease;
+    }
+    .card.active { opacity: 1; }
+    .card h3 { margin: 0 0 6px 0; font-size: 14px; color: #555; }
+    .card .value { font-size: 28px; font-weight: 700; margin-top:6px; }
+    .card .delta { font-size: 12px; color: #2a9d4d; margin-top:6px; }
+
+    .two-col { display:flex; gap:16px; align-items:flex-start; }
+    .left { flex: 0 0 48%; background:#fff; border:1px solid #eee; padding:12px; border-radius:6px; }
+    .right { flex: 1 1 auto; background:#fff; border:1px solid #eee; padding:12px; border-radius:6px; }
+
+    #heatmap { width:100%; height:360px; display:block; background:#fff; border:1px solid #eee; }
+    #energy-chart { width:100%; height:420px; display:block; background:#fff; border:1px solid #eee; cursor:crosshair; }
+
+    /* Controls row inside right panel */
+    .controls-row { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    .controls-row label { font-size:13px; color:#333; margin-right:6px; font-weight: 500; }
+    .controls-row select, .controls-row button { padding:6px 8px; font-size:13px; }
+
+    .status-row { display:flex; gap:16px; align-items:center; margin-bottom:12px; color:#444; font-size:13px; }
+    .muted { color:#666; font-size:13px; margin-top:8px; }
+
+    /* Legend styles */
+    .legend { margin-bottom: 12px; padding: 8px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 4px; }
+    .legend-title { font-weight: 600; font-size: 12px; margin-bottom: 6px; }
+    .legend-items { display: flex; gap: 12px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+    .legend-color { width: 14px; height: 14px; border-radius: 2px; }
+
+    /* Tooltip styles */
+    #tooltip {
+      position: absolute;
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      display: none;
+      z-index: 1000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+
+    @media (max-width: 900px) {
+      .two-col { flex-direction: column; }
+      .left, .right { flex: 1 1 auto; }
+      .metrics { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Twin-B</h1>
+      <div class="nav-line">
+        <a href="index.html">Home</a> &nbsp;|&nbsp; <strong>Energy Usage vs Comfort Score</strong>
+      </div>
+    </header>
+
+    <!-- Top metric cards - shown after selection -->
+    <div class="metrics" id="metrics-container">
+      <div class="card" id="card-total-energy">
+        <h3>Total Energy Usage</h3>
+        <div class="value" id="total-energy-value">Select filters</div>
+        <div class="delta" id="total-energy-delta">-</div>
+      </div>
+
+      <div class="card" id="card-avg-comfort">
+        <h3>Average Comfort Level</h3>
+        <div class="value" id="avg-comfort-value">Select filters</div>
+        <div class="delta" id="avg-comfort-delta">-</div>
+      </div>
+
+      <div class="card" id="card-policy-score">
+        <h3>Policy Score</h3>
+        <div class="value" id="policy-score-value">Select filters</div>
+        <div class="delta" id="policy-score-delta">-</div>
+      </div>
+    </div>
+
+    <!-- Main two columns -->
+    <div class="two-col">
+      <div class="left">
+        <h3 style="margin-top:0">Energy Usage Heat Map</h3>
+        <p style="font-size:13px; color:#666; margin:0 0 8px 0;">Scenario × Policy energy totals</p>
+        <canvas id="heatmap">Your browser does not support canvas.</canvas>
+        <div class="muted" id="heatmap-note">Heatmap from <code>total_energy_scenario_policy.csv</code></div>
+      </div>
+
+      <div class="right">
+        <h3 style="margin-top:0">Comfort Level vs Energy Score</h3>
+
+        <div class="controls-row" style="margin-bottom:6px;">
+          <label for="env-scenario">Scenario:</label>
+          <select id="env-scenario" style="min-width:160px;">
+            <option value="">(all)</option>
+            <option value="conference">conference</option>
+            <option value="exam_period">exam_period</option>
+            <option value="normal_weekday">normal_weekday</option>
+            <option value="summer_break">summer_break</option>
+            <option value="weekend">weekend</option>
+          </select>
+
+          <label for="env-policy">Policy:</label>
+          <select id="env-policy" style="min-width:180px;">
+            <option value="">(all)</option>
+            <option value="minimum_activation">minimum_activation</option>
+            <option value="setpoint_expansion_1c">setpoint_expansion_1c</option>
+            <option value="setpoint_expansion_2c">setpoint_expansion_2c</option>
+            <option value="setpoint_expansion_3c">setpoint_expansion_3c</option>
+          </select>
+
+          <button id="load-energy-btn">Load & Plot</button>
+          <button id="export-energy-csv-btn" style="margin-left:auto">Export CSV</button>
+        </div>
+
+        <div class="status-row">
+          <div><strong>Total Rows:</strong> <span id="rows-count">-</span></div>
+          <div><strong>Filtered Points:</strong> <span id="point-count">-</span></div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+          <div class="legend-title">Policy Color Legend</div>
+          <div class="legend-items" id="legend-items"></div>
+        </div>
+
+        <canvas id="energy-chart">Your browser does not support canvas.</canvas>
+
+        <div class="muted" id="energy-note">
+          Interactive scatter plot: Comfort Level (Y-axis) vs Energy Score (X-axis) from <code>rank_optimal.csv</code><br/>
+          Hover over points for details. Trend line shows overall pattern. Grid lines for reference.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tooltip for hover -->
+  <div id="tooltip"></div>
+
+  <script>
+    // Policy color mapping
+    const POLICY_COLORS = {
+      'minimum_activation': '#FF6B6B',
+      'setpoint_expansion_1c': '#4ECDC4',
+      'setpoint_expansion_2c': '#45B7D1',
+      'setpoint_expansion_3c': '#FFA07A'
+    };
+
+    // Global for tooltip handling (single handler)
+    let scatterPointsGlobal = [];
+
+    // small helpers
+    function parseNumber(v) {
+      if (v == null) return NaN;
+      if (typeof v === 'number') return v;
+      const n = parseFloat(String(v).replace(',', '.'));
+      return isNaN(n) ? NaN : n;
+    }
+
+    // Fetch rank_optimal CSV via backend endpoint
+    async function fetchRankOptimal() {
+      const r = await fetch('/api/energy-csv/rank_optimal');
+      if (!r.ok) throw new Error('Failed to fetch rank_optimal.csv: ' + r.status);
+      const j = await r.json();
+      return j.rows ?? j.data ?? j;
+    }
+
+    // Fetch total_energy_scenario_policy for heatmap
+    async function fetchTotalEnergy() {
+      const r = await fetch('/api/energy-csv/total_energy_scenario_policy');
+      if (!r.ok) throw new Error('Failed to fetch total_energy_scenario_policy.csv: ' + r.status);
+      const j = await r.json();
+      return j.rows ?? j.data ?? j;
+    }
+
+    // Filter helper for scenario/policy
+    function filterRows(rows, scenario, policy) {
+      return (rows || []).filter(r => {
+        const s = (r.scenario ?? r.Scenario ?? '').toString();
+        const p = (r.policy ?? r.Policy ?? '').toString();
+        if (scenario && scenario !== '') {
+          if (s !== scenario) return false;
+        }
+        if (policy && policy !== '') {
+          if (p !== policy) return false;
+        }
+        return true;
+      });
+    }
+
+    // Calculate linear regression for trend line
+    function calculateTrendLine(points) {
+      const validPoints = points.filter(p => !isNaN(p.x) && !isNaN(p.y));
+      if (validPoints.length < 2) return null;
+
+      const n = validPoints.length;
+      const sumX = validPoints.reduce((s, p) => s + p.x, 0);
+      const sumY = validPoints.reduce((s, p) => s + p.y, 0);
+      const sumXY = validPoints.reduce((s, p) => s + p.x * p.y, 0);
+      const sumX2 = validPoints.reduce((s, p) => s + p.x * p.x, 0);
+
+      const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+      const intercept = (sumY - slope * sumX) / n;
+
+      return { slope, intercept };
+    }
+
+    // Draw interactive scatter plot with trend line, labels, grid.
+    // Note: this function ONLY draws and updates scatterPointsGlobal.
+    function drawScatterPlot(selector, points, rawData) {
+      const canvas = document.querySelector(selector);
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      const DPR = window.devicePixelRatio || 1;
+      const W = canvas.parentElement.clientWidth || 700;
+      const H = 420;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      canvas.width = Math.round(W * DPR);
+      canvas.height = Math.round(H * DPR);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      if (!points || points.length === 0) {
+        ctx.fillStyle = '#666';
+        ctx.font = '14px Arial';
+        ctx.fillText('No points to plot for selected filters.', 20, 40);
+        scatterPointsGlobal = [];
+        return;
+      }
+
+      const validPoints = points.filter(p => !isNaN(p.x) && !isNaN(p.y));
+      if (validPoints.length === 0) {
+        ctx.fillStyle = '#666';
+        ctx.font = '14px Arial';
+        ctx.fillText('No valid numeric values found.', 20, 40);
+        scatterPointsGlobal = [];
+        return;
+      }
+
+      const margin = { left: 70, right: 40, top: 30, bottom: 60 };
+      const plotW = W - margin.left - margin.right;
+      const plotH = H - margin.top - margin.bottom;
+
+      const xs = validPoints.map(p => p.x);
+      const ys = validPoints.map(p => p.y);
+      const xMin = Math.min(...xs), xMax = Math.max(...xs);
+      const yMin = Math.min(...ys), yMax = Math.max(...ys);
+      const xRange = (xMax - xMin) || 1;
+      const yRange = (yMax - yMin) || 1;
+
+      // Background
+      ctx.fillStyle = '#fafafa';
+      ctx.fillRect(margin.left, margin.top, plotW, plotH);
+
+      // Grid lines
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        // vertical lines
+        const x = margin.left + t * plotW;
+        ctx.beginPath();
+        ctx.moveTo(x, margin.top);
+        ctx.lineTo(x, margin.top + plotH);
+        ctx.stroke();
+        // horizontal lines
+        const y = margin.top + (1 - t) * plotH;
+        ctx.beginPath();
+        ctx.moveTo(margin.left, y);
+        ctx.lineTo(margin.left + plotW, y);
+        ctx.stroke();
+      }
+
+      // Axes
+      ctx.strokeStyle = '#333';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(margin.left, margin.top + plotH);
+      ctx.lineTo(margin.left + plotW, margin.top + plotH);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(margin.left, margin.top);
+      ctx.lineTo(margin.left, margin.top + plotH);
+      ctx.stroke();
+
+      // Draw trend line
+      const trend = calculateTrendLine(validPoints);
+      if (trend) {
+        ctx.strokeStyle = 'rgba(150, 150, 150, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        let firstPoint = true;
+        for (let x = xMin; x <= xMax; x += xRange / 50) {
+          const y = trend.slope * x + trend.intercept;
+          const px = margin.left + ((x - xMin) / xRange) * plotW;
+          const py = margin.top + (1 - (y - yMin) / yRange) * plotH;
+          if (firstPoint) { ctx.moveTo(px, py); firstPoint = false; } else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Draw points colored by policy with labels
+      const pointRadius = 5;
+      for (let i = 0; i < validPoints.length; i++) {
+        const p = validPoints[i];
+        const px = margin.left + ((p.x - xMin) / xRange) * plotW;
+        const py = margin.top + (1 - (p.y - yMin) / yRange) * plotH;
+
+        const policy = p.policy || 'unknown';
+        const color = POLICY_COLORS[policy] || '#999';
+
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(px, py, pointRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Outline
+        ctx.strokeStyle = '#333';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // Store point info for hover in CSS pixels
+        p.screenX = px;
+        p.screenY = py;
+
+        // Label important points (top performers or sampled)
+        if (p.raw && (p.raw.rank <= 5 || i % Math.ceil(validPoints.length / 5) === 0)) {
+          ctx.fillStyle = '#333';
+          ctx.font = 'bold 10px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillText(p.policy?.slice(0, 3).toUpperCase(), px, py - pointRadius - 8);
+        }
+      }
+
+      // Axis labels and ticks
+      ctx.fillStyle = '#000';
+      ctx.font = '13px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Energy Score', margin.left + plotW / 2, H - 12);
+
+      ctx.save();
+      ctx.translate(15, margin.top + plotH / 2);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText('Comfort Level', 0, 0);
+      ctx.restore();
+
+      // X-axis ticks
+      ctx.fillStyle = '#666';
+      ctx.font = '11px Arial';
+      ctx.textAlign = 'center';
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        const val = xMin + t * xRange;
+        const x = margin.left + t * plotW;
+        ctx.fillText(val.toFixed(2), x, margin.top + plotH + 20);
+      }
+
+      // Y-axis ticks
+      ctx.textAlign = 'right';
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        const val = yMin + (1 - t) * yRange;
+        const y = margin.top + (1 - t) * plotH;
+        ctx.fillText(val.toFixed(2), margin.left - 12, y + 4);
+      }
+
+      // Update global points for the single mouse handler
+      scatterPointsGlobal = validPoints;
+    }
+
+    // --- New: nicer heatmap color helpers (Viridis-like palette with smooth interpolation) ---
+    const HEATMAP_PALETTE = [
+      '#440154', '#482878', '#3E4A89', '#31688E',
+      '#26828E', '#1F9E89', '#35B779', '#6DCD59',
+      '#B4DE2C', '#FDE725'
+    ];
+
+    function hexToRgb(hex) {
+      const h = hex.replace('#', '');
+      const bigint = parseInt(h, 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return { r, g, b };
+    }
+
+    function rgbToHex(r, g, b) {
+      const toHex = (v) => ('0' + Math.round(v).toString(16)).slice(-2);
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+    }
+
+    function interpolateColor(hexA, hexB, t) {
+      const a = hexToRgb(hexA), b = hexToRgb(hexB);
+      const r = a.r + (b.r - a.r) * t;
+      const g = a.g + (b.g - a.g) * t;
+      const bl = a.b + (b.b - a.b) * t;
+      return rgbToHex(r, g, bl);
+    }
+
+    function getHeatmapColor(t) {
+      const clamped = Math.max(0, Math.min(1, t));
+      const n = HEATMAP_PALETTE.length;
+      const idx = clamped * (n - 1);
+      const i = Math.floor(idx);
+      const f = idx - i;
+      if (i >= n - 1) return HEATMAP_PALETTE[n - 1];
+      return interpolateColor(HEATMAP_PALETTE[i], HEATMAP_PALETTE[i + 1], f);
+    }
+
+    // Use relative luminance to pick label color for contrast
+    function relativeLuminance(hex) {
+      const { r, g, b } = hexToRgb(hex);
+      const srgb = [r / 255, g / 255, b / 255].map(c => {
+        return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+      });
+      return 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+    }
+
+    // Draw heatmap from total_energy_scenario_policy (updated to use nicer palette)
+    function drawEnergyHeatmap(selector, rows) {
+      const canvas = document.querySelector(selector);
+      if (!canvas) return;
+
+      const ctx = canvas.getContext('2d');
+      const DPR = window.devicePixelRatio || 1;
+      const W = canvas.parentElement.clientWidth || 520;
+      const H = 360;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      canvas.width = Math.round(W * DPR);
+      canvas.height = Math.round(H * DPR);
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      ctx.clearRect(0, 0, W, H);
+
+      if (!Array.isArray(rows) || rows.length === 0) {
+        ctx.fillStyle = '#999';
+        ctx.font = '12px Arial';
+        ctx.fillText('No heatmap data available', 20, 40);
+        return;
+      }
+
+      const SCENARIOS = ['conference', 'exam_period', 'normal_weekday', 'summer_break', 'weekend'];
+      const POLICIES = ['minimum_activation', 'setpoint_expansion_1c', 'setpoint_expansion_2c', 'setpoint_expansion_3c'];
+
+      // Parse data: create matrix
+      const matrix = {};
+      for (const scenario of SCENARIOS) {
+        matrix[scenario] = {};
+        for (const policy of POLICIES) {
+          matrix[scenario][policy] = NaN;
+        }
+      }
+
+      for (const r of rows) {
+        const scenario = (r.Scenario || r.scenario || '').toString().toLowerCase();
+        const policy = (r.Policy || r.policy || '').toString().toLowerCase();
+        // Accept formatted numbers like "50,782.24"
+        let energy = parseNumber(String(r['Total Energy (kWh)'] ?? r.energy ?? r['energy_usage_mwh'] ?? '0').replace(/,/g, ''));
+        if (SCENARIOS.some(s => s === scenario) && POLICIES.some(p => p === policy)) {
+          matrix[scenario][policy] = energy;
+        }
+      }
+
+      const padding = { left: 140, top: 30, right: 50, bottom: 100 };
+      const gridW = W - padding.left - padding.right;
+      const gridH = H - padding.top - padding.bottom;
+      const cellW = gridW / POLICIES.length;
+      const cellH = gridH / SCENARIOS.length;
+
+      // Find min/max for color scaling
+      let values = [];
+      for (const s of SCENARIOS) {
+        for (const p of POLICIES) {
+          const v = matrix[s][p];
+          if (!isNaN(v)) values.push(v);
+        }
+      }
+      const minV = Math.min(...values);
+      const maxV = Math.max(...values);
+      const vRange = maxV - minV || 1;
+
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, W, H);
+
+      // Draw cells using interpolated palette
+      for (let r = 0; r < SCENARIOS.length; r++) {
+        for (let c = 0; c < POLICIES.length; c++) {
+          const scenario = SCENARIOS[r];
+          const policy = POLICIES[c];
+          const v = matrix[scenario][policy];
+
+          const x = padding.left + c * cellW;
+          const y = padding.top + r * cellH;
+
+          if (!isNaN(v)) {
+            const t = (v - minV) / vRange;
+            const color = getHeatmapColor(t);
+            ctx.fillStyle = color;
+          } else {
+            ctx.fillStyle = '#f3f3f3';
+          }
+
+          ctx.fillRect(x, y, cellW, cellH);
+
+          // Cell border
+          ctx.strokeStyle = '#ddd';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x, y, cellW, cellH);
+
+          // Value label
+          if (!isNaN(v)) {
+            const color = getHeatmapColor((v - minV) / vRange);
+            const textColor = (relativeLuminance(color) > 0.5) ? '#000' : '#fff';
+            ctx.fillStyle = textColor;
+            ctx.font = '10px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(v.toFixed(0), x + cellW / 2, y + cellH / 2);
+          }
+        }
+      }
+
+      // Scenario labels (left)
+      ctx.fillStyle = '#000';
+      ctx.font = '11px Arial';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      for (let r = 0; r < SCENARIOS.length; r++) {
+        const y = padding.top + r * cellH + cellH / 2;
+        ctx.fillText(SCENARIOS[r], padding.left - 12, y);
+      }
+
+      // Policy labels (bottom)
+      ctx.save();
+      for (let c = 0; c < POLICIES.length; c++) {
+        const x = padding.left + c * cellW + cellW / 2;
+        const y = padding.top + SCENARIOS.length * cellH + 12;
+        ctx.translate(x, y);
+        ctx.rotate(Math.PI / 4);
+        ctx.textAlign = 'left';
+        ctx.font = '10px Arial';
+        ctx.fillText(POLICIES[c], 0, 0);
+        ctx.rotate(-Math.PI / 4);
+        ctx.translate(-x, -y);
+      }
+      ctx.restore();
+
+      // Title
+      ctx.fillStyle = '#000';
+      ctx.font = 'bold 13px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Total Energy by Scenario & Policy', W / 2, 18);
+
+      // Colorbar (use our palette interpolation)
+      const cbX = padding.left + gridW + 18;
+      const cbY = padding.top;
+      const cbW = 20;
+      const cbH = gridH;
+      const grad = ctx.createLinearGradient(cbX, cbY + cbH, cbX, cbY);
+      // Create a smooth gradient by sampling the palette
+      for (let i = 0; i <= 100; i++) {
+        const t = i / 100;
+        grad.addColorStop(t, getHeatmapColor(t));
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(cbX, cbY, cbW, cbH);
+      ctx.strokeStyle = '#000';
+      ctx.strokeRect(cbX, cbY, cbW, cbH);
+
+      // Colorbar labels
+      ctx.fillStyle = '#000';
+      ctx.font = '10px Arial';
+      ctx.textAlign = 'left';
+      ctx.fillText(maxV.toFixed(0), cbX + cbW + 4, cbY + 4);
+      ctx.textAlign = 'left';
+      ctx.fillText(minV.toFixed(0), cbX + cbW + 4, cbY + cbH);
+    }
+
+    // Compute metrics from filtered rows
+    function computeMetrics(rows) {
+      const totalEnergyMwh = (rows || []).reduce((acc, r) => acc + (parseNumber(r.energy_usage_mwh) || 0), 0);
+      const totalEnergyKwh = totalEnergyMwh * 1000;
+      const comfortVals = (rows || []).map(r => parseNumber(r.comfort_normalize ?? r.comfort_score)).filter(v => !isNaN(v));
+      const avgComfort = comfortVals.length ? (comfortVals.reduce((a, b) => a + b, 0) / comfortVals.length) : NaN;
+      const bestTotalScore = (rows || []).reduce((m, r) => Math.max(m, parseNumber(r.total_score_optitimal) || 0), 0);
+      return {
+        totalEnergyKwh, avgComfort, policyScore: bestTotalScore * 100
+      };
+    }
+
+    // Update legend
+    function updateLegend() {
+      const container = document.getElementById('legend-items');
+      container.innerHTML = '';
+      for (const [policy, color] of Object.entries(POLICY_COLORS)) {
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        item.innerHTML = `
+          <div class="legend-color" style="background: ${color};"></div>
+          <span>${policy}</span>
+        `;
+        container.appendChild(item);
+      }
+    }
+
+    // Main load function
+    async function loadDashboardData() {
+      try {
+        const rankRows = await fetchRankOptimal();
+        const energyRows = await fetchTotalEnergy();
+
+        const scenario = document.getElementById('env-scenario')?.value ?? '';
+        const policy = document.getElementById('env-policy')?.value ?? '';
+        const filtered = filterRows(rankRows, scenario, policy);
+
+        // Update metrics cards
+        const metrics = computeMetrics(filtered);
+        const te = document.getElementById('total-energy-value');
+        if (te) te.textContent = isNaN(metrics.totalEnergyKwh) ? '-' : `${metrics.totalEnergyKwh.toFixed(0)} kWh`;
+        const ac = document.getElementById('avg-comfort-value');
+        if (ac) ac.textContent = isNaN(metrics.avgComfort) ? '-' : `${metrics.avgComfort.toFixed(1)}/10`;
+        const ps = document.getElementById('policy-score-value');
+        if (ps) ps.textContent = isNaN(metrics.policyScore) ? '-' : `${Math.round(metrics.policyScore)}/100`;
+
+        // Activate metric cards
+        document.querySelectorAll('.card').forEach(card => {
+          card.classList.add('active');
+        });
+
+        // Prepare points for scatter plot — use energy_score on X-axis
+        const points = filtered.map(r => ({
+          rank: r.rank,
+          scenario: r.scenario,
+          policy: r.policy,
+          x: parseNumber(r.energy_score),
+          y: parseNumber(r.comfort_score),
+          raw: r
+        }));
+
+        // Update counts
+        const rc = document.getElementById('rows-count');
+        if (rc) rc.textContent = (rankRows || []).length;
+        const pc = document.getElementById('point-count');
+        if (pc) pc.textContent = filtered.length;
+
+        // Draw charts
+        drawScatterPlot('#energy-chart', points, filtered);
+        drawEnergyHeatmap('#heatmap', energyRows);
+
+        // Setup export
+        document.getElementById('export-energy-csv-btn').onclick = () => {
+          if (!filtered || filtered.length === 0) {
+            alert('No filtered rows');
+            return;
+          }
+          const headers = Object.keys(filtered[0]);
+          let csv = headers.join(',') + '\n';
+          for (const r of filtered) {
+            const vals = headers.map(h => {
+              const v = r[h] ?? '';
+              const s = String(v);
+              return s.includes(',') ? `"${s.replace(/"/g, '""')}"` : s;
+            });
+            csv += vals.join(',') + '\n';
+          }
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'rank_optimal_filtered.csv';
+          a.click();
+          URL.revokeObjectURL(url);
+        };
+
+      } catch (err) {
+        console.error('loadDashboardData failed', err);
+      }
+    }
+
+    // Attach single tooltip handlers (read scatterPointsGlobal). Called once.
+    function attachScatterHandlersOnce() {
+      const canvas = document.getElementById('energy-chart');
+      if (!canvas) return;
+      if (canvas._scatterHandlersAttached) return;
+      canvas._scatterHandlersAttached = true;
+
+      canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const tooltip = document.getElementById('tooltip');
+
+        let found = false;
+        for (const p of scatterPointsGlobal) {
+          if (!p || p.screenX == null || p.screenY == null) continue;
+          const dx = mouseX - p.screenX;
+          const dy = mouseY - p.screenY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 12) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 10) + 'px';
+            tooltip.style.top = (e.clientY + 10) + 'px';
+            tooltip.innerHTML = `
+              <strong>${p.scenario ?? 'N/A'}</strong> - ${p.policy ?? 'N/A'}<br/>
+              Energy Score: ${isNaN(p.x) ? 'N/A' : p.x.toFixed(3)}<br/>
+              Comfort: ${isNaN(p.y) ? 'N/A' : p.y.toFixed(3)}<br/>
+              Rank: ${p.rank ?? 'N/A'}
+            `;
+            found = true;
+            break;
+          }
+        }
+        if (!found) tooltip.style.display = 'none';
+      });
+
+      canvas.addEventListener('mouseleave', () => {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.style.display = 'none';
+      });
+    }
+
+    // Hook up button
+    const loadBtn = document.getElementById('load-energy-btn');
+    if (loadBtn) {
+      loadBtn.addEventListener('click', loadDashboardData);
+    }
+
+    // Scenario/Policy dropdowns trigger reload
+    const scenEl = document.getElementById('env-scenario');
+    const polEl = document.getElementById('env-policy');
+    if (scenEl) scenEl.addEventListener('change', loadDashboardData);
+    if (polEl) polEl.addEventListener('change', loadDashboardData);
+
+    // Initial load
+    (async function init() {
+      updateLegend();
+      attachScatterHandlersOnce();
+      await loadDashboardData();
+    })();
+  </script>
+</body>
+</html>

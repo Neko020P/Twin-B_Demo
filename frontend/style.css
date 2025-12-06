@@ -1,0 +1,194 @@
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #fafafa;
+  color: #222;
+}
+
+#app {
+  max-width: 1200px;
+  margin: 16px auto;
+  padding: 12px;
+}
+
+header h1 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+}
+
+/* Two-column layout: left controls + right visuals */
+.two-col {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+/* Left panel (controls) */
+#left-panel {
+  width: 320px;
+  box-sizing: border-box;
+  background: #fff;
+  border: 1px solid #eee;
+  padding: 12px;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+#controls .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+#controls label {
+  font-size: 14px;
+  min-width: 90px;
+}
+
+#controls select, #controls button {
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+/* Stack the main action buttons vertically on the left panel */
+.vertical-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.left-footer {
+  margin-top: 12px;
+  color: #666;
+  font-size: 12px;
+}
+
+/* Right panel (visuals) fills remaining space */
+#right-panel {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Visuals area */
+#visuals {
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: calc(100vh - 200px); /* keep heatmap visible */
+}
+
+/* Make the canvas fill the available vertical space in the visuals area */
+#heatmap {
+  width: 100%;
+  height: 100%;
+  border: 1px solid #ddd;
+  background: #fff;
+  display: block;
+}
+
+/* CSV preview sits below the canvas */
+#csv-preview {
+  margin-top: 0;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #eee;
+  padding: 8px;
+  background: #fff;
+}
+
+/* Adjust existing small-screen behavior: stack left/right vertically */
+@media (max-width: 900px) {
+  .two-col {
+    flex-direction: column;
+  }
+  #left-panel {
+    width: 100%;
+  }
+  #right-panel {
+    width: 100%;
+    height: auto;
+  }
+  #visuals {
+    height: 480px;
+  }
+}
+
+/* Keep some of the previous minimal styles in case they are used elsewhere */
+footer {
+  margin-top: 14px;
+  color: #666;
+  font-size: 12px;
+}
+
+
+/* body {
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  background: #fafafa;
+  color: #222;
+}
+
+#app {
+  max-width: 1200px;
+  margin: 16px auto;
+  padding: 12px;
+}
+
+header h1 {
+  margin: 0 0 12px 0;
+  font-size: 20px;
+}
+
+#controls .row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+#controls label {
+  font-size: 14px;
+}
+
+#controls select, #controls button {
+  padding: 6px 8px;
+  font-size: 14px;
+}
+
+#visuals {
+  margin-top: 12px;
+}
+
+#heatmap {
+  width: 100%;
+  height: 600px;
+  border: 1px solid #ddd;
+  background: #fff;
+  display: block;
+}
+
+#csv-preview {
+  margin-top: 12px;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid #eee;
+  padding: 8px;
+  background: #fff;
+}
+
+footer {
+  margin-top: 14px;
+  color: #666;
+  font-size: 12px;
+} */

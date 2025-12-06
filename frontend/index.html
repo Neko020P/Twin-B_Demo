@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Twin-B</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <h1>Twin-B</h1>
+      <div style="margin-top: 6px; font-size: 14px;">
+        <strong>Home</strong> &nbsp;|&nbsp;
+        <a href="energy.html">Energy Usage vs Comfort Score</a>
+      </div>
+    </header>
+
+    <div class="two-col">
+      <aside id="left-panel">
+        <section id="controls">
+          <div class="row">
+            <label for="data-type">Data Type:</label>
+            <select id="data-type">
+              <option value="zones" selected>zones</option>
+              <option value="agents">agents</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label for="scenario">Scenario:</label>
+            <select id="scenario">
+              <option value="conference">conference</option>
+              <option value="exam_period">exam_period</option>
+              <option value="normal_weekday">normal_weekday</option>
+              <option value="summer_break">summer_break</option>
+              <option value="weekend">weekend</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label for="policy">Policy:</label>
+            <select id="policy">
+              <option value="minimum_activation">minimum_activation</option>
+              <option value="setpoint_expansion_1c">setpoint_expansion_1c</option>
+              <option value="setpoint_expansion_2c">setpoint_expansion_2c</option>
+              <option value="setpoint_expansion_3c">setpoint_expansion_3c</option>
+            </select>
+
+            <button id="load-csv-btn">Load CSV</button>
+          </div>
+
+          <hr />
+
+          <div class="row">
+            <label for="room-select">Room / Zone:</label>
+            <select id="room-select">
+              <option value="">(loading...)</option>
+            </select>
+          </div>
+
+          <div class="vertical-buttons">
+            <button id="show-zone-heatmap-btn">Show Zone Heatmap (comfort)</button>
+            <button id="export-heatmap-btn">Export Heatmap PNG</button>
+          </div>
+        </section>
+
+        <footer class="left-footer">
+          <small>Twin-B Demo — frontend</small>
+        </footer>
+      </aside>
+
+      <main id="right-panel">
+        <section id="visuals">
+          <canvas id="heatmap">Your browser does not support canvas.</canvas>
+          <div id="csv-preview"></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
